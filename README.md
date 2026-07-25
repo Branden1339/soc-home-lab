@@ -1,23 +1,28 @@
-# soc-home-lab
-Building a Security Operations Center (SOC) home lab using VMware, Windows, Kali Linux, Splunk, and Sysmon.
 # SOC Home Lab
 
-## Project Overview
+## Overview
 
-This project documents the creation of a Security Operations Center (SOC) home lab using VMware Workstation, Windows 11, Kali Linux, Splunk, and Sysmon.
+This project documents the design, implementation, and operation of a Security Operations Center (SOC) home lab built using VMware.
 
-### Objectives
+The goal of this lab is to gain practical experience with:
 
-- Build a virtualized security lab
-- Centralize log collection using Splunk
-- Investigate security incidents
-- Practice threat detection and incident response
-- Develop a cybersecurity portfolio
-
-### Technologies
-
-- VMware Workstation Pro
-- Windows 11
-- Kali Linux
-- Splunk
+- Windows Endpoint Security
 - Sysmon
+- Splunk SIEM
+- Log Analysis
+- Threat Detection
+- Incident Investigation
+- Python Automation
+- PowerShell
+
+## Current Progress
+
+- [x] VMware Installed
+- [x] Windows 11 VM
+- [x] VMware Tools
+- [x] Initial Snapshot
+- [ ] Sysmon
+- [ ] Splunk
+- [ ] Universal Forwarder
+- [ ] Kali Attack VM
+- [ ] Detection Engineering
