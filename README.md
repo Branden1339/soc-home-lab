@@ -21,8 +21,8 @@ The goal of this lab is to gain practical experience with:
 - [x] Windows 11 VM
 - [x] VMware Tools
 - [x] Initial Snapshot
-- [ ] Sysmon
-- [ ] Splunk
-- [ ] Universal Forwarder
+- [x] Sysmon
+- [x] Splunk
+- [x] Universal Forwarder
 - [ ] Kali Attack VM
 - [ ] Detection Engineering
