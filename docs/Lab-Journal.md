@@ -137,3 +137,49 @@ All three VMs (Kali attacker, Windows 11 endpoint, Splunk SIEM) are
 confirmed connected. Next: run a first test attack from Kali (e.g. a
 port scan) against the Windows VM and confirm Sysmon/Splunk captures the
 resulting activity — first step into actual detection engineering.
+
+## Day 5
+
+### Objective
+Run a first attack simulation from Kali against the Windows 11 endpoint
+and confirm Sysmon/Splunk captures it as a real, analyzable detection.
+
+### Completed
+- Ran an initial Nmap scan (`nmap -sV`) from Kali against the Windows VM —
+  all 1000 ports came back "filtered" (Windows Firewall silently dropping
+  probes), confirming Windows was reachable but exposing no open services
+- Checked Splunk for resulting Sysmon Event ID 3 activity — found only
+  unrelated OneDrive sync traffic, confirming the filtered scan left
+  nothing for Sysmon to observe (packets never reached a process)
+- Enabled Remote Desktop (RDP) on the Windows VM:
+  - Set `fDenyTSConnections` registry value to 0
+  - Enabled the "Remote Desktop" firewall rule group
+  - Confirmed the Terminal Services (TermService) service running
+- Re-ran the Nmap scan — port 3389/tcp now returned open, identified as
+  ms-wbt-server (RDP)
+- Searched Splunk (`index=main host="WIN11-CLIENT01" EventCode=3
+  DestinationPort=3389`) and found matching Sysmon events capturing the
+  scan hitting the RDP port
+- Broke down the full event fields (RuleName, Initiated, SourceIp,
+  DestinationPort, Image, User) to understand what makes this event a
+  legitimate detection vs routine background noise
+
+### Lessons Learned
+- A fully firewall-filtered scan generates no host-based log activity —
+  Sysmon only sees traffic that actually reaches a process on the
+  endpoint, not packets blocked at the network layer
+- This is why host-based tools (Sysmon) and network-based tools
+  (firewall/IDS logs) complement each other — they observe different
+  layers of an attack
+- Key fields that turn a raw Sysmon network event into a meaningful
+  detection: Initiated (inbound vs outbound), SourceIp (who connected),
+  DestinationPort (what service was targeted), and RuleName (Sysmon's own
+  config tagging known-significant traffic like RDP)
+- RDP (port 3389) is one of the most commonly attacked real-world
+  services, heavily tied to ransomware entry — a strong first detection
+  scenario to build around
+
+### Next Steps
+Build a saved Splunk search (and eventually an alert) around this RDP
+connection pattern — the natural next step from "found it manually" to
+actual detection engineering.
