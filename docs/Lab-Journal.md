@@ -97,3 +97,43 @@ from the Windows 11 endpoint to it.
 Explore Sysmon data in Splunk (build basic searches around Event ID 1),
 then move toward setting up the Kali attack VM to start generating traffic
 for detection engineering.
+
+## Day 4
+
+### Objective
+Bring the Kali Linux VM online as the lab's attacker machine and confirm
+network connectivity across all three VMs (Kali, Windows 11, Splunk-SIEM).
+
+### Completed
+- Booted existing Kali Linux VM, confirmed default login
+- Verified Kali's network adapter is set to NAT, matching the Windows and
+  Splunk VMs
+- Confirmed Kali's IP (192.168.89.128) is on the same subnet as the
+  Windows VM (192.168.89.129) and Splunk VM (192.168.89.131)
+- Updated Kali (`apt update && apt upgrade`)
+- Diagnosed a one-directional ping failure (Kali -> Windows failed,
+  Windows -> Kali worked) as an inbound Windows Firewall block
+- Enabled inbound ICMPv4 rules on the Windows VM
+  (`Enable-NetFirewallRule -DisplayName "*ICMPv4-In*"`)
+- Confirmed full bidirectional ping connectivity between Kali and the
+  Windows VM
+
+### Lessons Learned
+- DHCP-assigned IPs on a NAT network aren't guaranteed to persist across
+  VM reboots — always re-verify current IPs rather than assuming
+  yesterday's addresses still apply
+- Windows Firewall blocks inbound ICMP (ping) by default as a basic
+  hardening measure, to prevent easy host discovery during reconnaissance
+- A one-directional ping failure (works one way, not the other) points to
+  a block on the target host specifically, not a routing/network issue —
+  testing both directions narrows down where a connectivity problem
+  actually lives
+- VMware can occasionally leave a stale "in use" lock on a VM after an
+  interrupted session; powering off all VMs and restarting clears it
+  without needing to remove/re-add the VM
+
+### Next Steps
+All three VMs (Kali attacker, Windows 11 endpoint, Splunk SIEM) are
+confirmed connected. Next: run a first test attack from Kali (e.g. a
+port scan) against the Windows VM and confirm Sysmon/Splunk captures the
+resulting activity — first step into actual detection engineering.
