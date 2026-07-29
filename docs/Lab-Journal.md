@@ -183,3 +183,49 @@ and confirm Sysmon/Splunk captures it as a real, analyzable detection.
 Build a saved Splunk search (and eventually an alert) around this RDP
 connection pattern — the natural next step from "found it manually" to
 actual detection engineering.
+
+## Day 6
+
+### Objective
+Turn the manually-found RDP detection into an automated Splunk saved
+search and alert, and validate the full pipeline end-to-end.
+
+### Completed
+- Refined the search to specifically target inbound connections:
+  `index=main host="WIN11-CLIENT01" EventCode=3 DestinationPort=3389
+  Initiated=false`
+- Saved the search as a Report named "RDP Inbound Connection Detected"
+- Configured scheduling: runs hourly, checking the last 60 minutes
+  (adjusted time range to match the run interval and avoid detection gaps)
+- Added a "Log Event" trigger action that writes a searchable alert
+  event whenever the search finds a match, using field values from the
+  triggering event ($result.SourceIp$, $result.DestinationIp$,
+  $result.DestinationPort$)
+- Diagnosed an Nmap "0 hosts up" false negative — the inbound ICMP
+  firewall rule didn't persist through a VM restart, causing Nmap's
+  default host-alive ping check to fail; fixed using the -Pn flag
+- Manually triggered the saved search after a fresh scan and confirmed
+  the Log Event action fired correctly, producing a searchable alert
+  entry with accurate source IP, destination IP, and port
+
+### Lessons Learned
+- Some manual firewall changes (like enabling inbound ICMP) don't persist
+  across VM reboots — worth remembering to re-check before assuming
+  connectivity is still configured the same way
+- A scheduled search's time range should match its run frequency to avoid
+  gaps where activity could be missed between checks
+- Nmap's default ping check can produce a false "host is down" result
+  even when the target is fully reachable but not responding to ICMP —
+  -Pn bypasses this
+- Running multiple VMs simultaneously on a 16GB host requires deliberately
+  right-sizing memory per VM (Windows 4GB, Splunk 4GB, Kali 2GB) rather
+  than using defaults everywhere
+- Completed the full loop from manual detection to automated alerting:
+  detection -> scheduled search -> trigger condition -> logged action,
+  which is genuinely explainable end-to-end in an interview setting
+
+### Next Steps
+Expand detection coverage to other MITRE ATT&CK-relevant scenarios beyond
+RDP scanning (e.g. brute-force login attempts, SMB enumeration, or
+suspicious process creation chains), and continue building out the
+Log-Field-Reference.md and Concept-Notes.md docs as new event types come up.
