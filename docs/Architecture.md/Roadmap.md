@@ -12,6 +12,6 @@ Splunk Enterprise indexer (Ubuntu VM) -> searchable in Splunk web UI
 ## Roadmap
 - [x] Windows endpoint + Sysmon
 - [x] Splunk SIEM + Universal Forwarder
-- [ ] Kali attack VM integrated into network
+- [x] Kali attack VM integrated into network
 - [ ] Detection engineering (SPL searches mapped to MITRE ATT&CK)
 - [ ] Documented attack scenarios + investigation writeups
