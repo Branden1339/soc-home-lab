@@ -229,3 +229,84 @@ Expand detection coverage to other MITRE ATT&CK-relevant scenarios beyond
 RDP scanning (e.g. brute-force login attempts, SMB enumeration, or
 suspicious process creation chains), and continue building out the
 Log-Field-Reference.md and Concept-Notes.md docs as new event types come up.
+
+## Day 7
+
+### Objective
+Recover from Windows 11 VM corruption caused by a OneDrive file deletion,
+and restore the lab to full working order.
+
+### Completed
+- Discovered the Windows 11 VM (WIN11-SOC) could not power on after
+  deleting files from OneDrive — VMware reported missing .vmdk files
+- Attempted recovery: checked OneDrive's recycle bin, verified files were
+  actually still present locally, moved the VM folder out of OneDrive to
+  a local path, and worked backward through the full VMware snapshot
+  chain (Day 5 -> Day 4 -> Sysmon+Forwarder -> Sysmon Installed ->
+  01-Clean Windows) — every restore point failed with the same
+  "parent of this virtual disk could not be opened" error, confirming
+  the base disk itself was corrupted, not just a snapshot
+- Decided to rebuild the Windows 11 VM from scratch rather than continue
+  chasing the corruption
+- Created the new VM directly under C:\VMs\WIN11-SOC (local disk, no
+  OneDrive) to prevent this from happening again
+- Windows 11 Pro fresh install (required for RDP support), VMware Tools,
+  Windows Update, baseline snapshot
+- Reinstalled Sysmon with the SwiftOnSecurity config (had to redo the
+  download twice due to incomplete zip/file downloads along the way)
+- Reinstalled the Splunk Universal Forwarder, set the service to run as
+  Local System from the start this time (already knew this fix from Day 3)
+- Diagnosed a "no stanzas found" forwarder error caused by inputs.conf
+  appearing to save in Notepad but actually remaining empty on disk;
+  fixed by explicitly re-saving and verifying with Get-Content before
+  restarting the service
+- Discovered the new VM's hostname defaulted to WIN11-SOC instead of
+  WIN11-CLIENT01, which explained why searches were returning no
+  results even though data was flowing; renamed the computer back to
+  WIN11-CLIENT01 to match existing documentation and saved searches
+- Re-enabled RDP, then diagnosed why port 3389 stayed filtered despite
+  every individual setting (registry, firewall rule, service status)
+  looking correct:
+  - Found the network adapter had been auto-classified as "Public"
+    profile, which scopes Windows' built-in RDP firewall rules to not
+    apply; reclassified to "Private" to match the lab's actual trust
+    level
+  - Even after that, RDP still wasn't listening on 3389 — found two
+    RDP-dependent services (SessionEnv, UmRdpService) were stopped
+    despite TermService itself showing "Running"
+  - Starting those services didn't fully resolve it either; a full
+    VM restart was ultimately required to get the RDP stack to bind
+    to the port correctly
+- Confirmed full pipeline restored end-to-end: Nmap scan from Kali finds
+  port 3389 open, Sysmon logs the connection, Splunk shows the event,
+  and the Day 6 "RDP Inbound Connection Detected" alert fires correctly
+
+### Lessons Learned
+- OneDrive sync and VM storage should never mix — even after fixing this
+  once before, files can still get deleted/corrupted if a VM folder is
+  anywhere OneDrive touches; VMs now live under C:\VMs, fully outside any
+  synced folder
+- A working snapshot chain doesn't protect against base disk corruption —
+  if the very first snapshot fails to open, the underlying disk itself
+  is damaged, not the snapshot layering
+- New Windows installs don't automatically retain hostname, network
+  profile classification, or service states from a previous machine —
+  every one of those needs to be re-verified after a rebuild, not
+  assumed to carry over
+- "Service shows Running" doesn't guarantee a feature is fully
+  functional — RDP required three separate services (TermService,
+  SessionEnv, UmRdpService) working together, and checking the port
+  directly (Get-NetTCPConnection) was more reliable than trusting
+  service status alone
+- Network profile (Public vs Private) silently scopes which firewall
+  rules apply, even when those rules show "Enabled: True" — a rule
+  can be on and still not apply on the current profile
+- When multiple system-level changes stack up in one session (rename,
+  network profile change, service state changes), a full restart is
+  sometimes the fastest real fix, even after individually verifying
+  each piece looks correct
+
+### Next Steps
+Snapshot the rebuilt VM now that it's fully verified working. Resume
+building out additional attack scenarios (starting with an RDP
+brute-force attempt using Hydra) on top of this restored environment.
