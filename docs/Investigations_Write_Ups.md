@@ -1,4 +1,4 @@
-**Investigation 01: Network Service Discovery (RDP Scan)**
+****Investigation 01: Network Service Discovery (RDP Scan)****
 **Alert / Trigger**
 
 Splunk saved search/alert: "RDP Inbound Connection Detected" Search: index=main host="WIN11-CLIENT01" EventCode=3 DestinationPort=3389 Initiated=false Triggered by Sysmon Event ID 3 (Network Connection) events on 07/27/2026, ~06:24 PM, sourced from WinEventLog:Microsoft-Windows- Sysmon/Operational on host WIN11-CLIENT01.
@@ -30,7 +30,9 @@ What made this detectable: Sysmon's Event ID 3 logging combined with a Splunk se
 Evasion considerations: A slower, more deliberate scan (e.g. one port at a time, spread over hours, or using timing options to evade common thresholds) would still generate individual Event ID 3 records but would be far less likely to stand out as an obvious burst of activity. This detection currently fires on any single inbound RDP connection — it does not by itself distinguish a scan from a single legitimate remote login, which leads to the next detection layer (see Investigation 02, RDP Brute Force).
 False positive potential: Legitimate remote administration, helpdesk RDP sessions, or authorized vulnerability scanning tools would also trigger this exact alert. In a real deployment, this detection would benefit from an allowlist of known admin source IPs to reduce noise.
 
-**Investigation 02: RDP Brute Force Attempt**
+
+
+****Investigation 02: RDP Brute Force Attempt****
 **Alert / Trigger**
 
 Splunk saved search/alert: "RDP Brute Force Attempt Detected" Search: index=main host="WIN11-CLIENT01" EventCode=3 DestinationPort=3389 Initiated=false | stats count by SourceIp | where count > 5 Triggered by an aggregation of Sysmon Event ID 3 (Network Connection) events on 08/17/2026, ~09:00-09:15 PM, sourced from WinEventLog:Microsoft-Windows-Sysmon/Operational on host WIN11-CLIENT01. Scheduled to run hourly, checking the last 60 minutes.
