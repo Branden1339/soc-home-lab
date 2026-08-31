@@ -67,3 +67,118 @@ What made this detectable: the aggregation logic (stats count by SourceIp | wher
 Detection gap identified: the hourly schedule creates up to a ~59 minute window in which a complete brute-force attempt could run and finish before the next scheduled check. The detection logic itself is sound; the scheduling interval is the weaker link.
 Evasion considerations: an attacker using a lower request rate (e.g. one attempt every few minutes instead of every 20 seconds) could stay under the count > 5 per-hour threshold while still eventually succeeding through sheer persistence over a longer timeframe — a "low and slow" brute force would likely evade this specific detection as configured.
 False positive potential: a legitimate user repeatedly mistyping their own password, or a misconfigured application retrying a stored (outdated) credential automatically, could both trigger this alert. Correlating with the account name involved (once available) and checking for eventual successful authentication would help distinguish genuine attacks from these benign causes.
+
+
+# Investigation 03: Suspicious Encoded PowerShell Execution
+
+## Alert / Trigger
+Splunk saved search/alert: **"Suspicious Encoded PowerShell Execution"**
+Search: `index=main host="WIN11-CLIENT01" EventCode=1
+CommandLine="*EncodedCommand*"`
+Triggered by a Sysmon Event ID 1 (Process Create) event on 08/31/2026,
+~02:19 PM, sourced from `WinEventLog:Microsoft-Windows-Sysmon/
+Operational` on host WIN11-CLIENT01. Scheduled via cron (`*/15 * * * *`)
+to run every 15 minutes, checking the last 15 minutes.
+
+## Summary
+A `cmd.exe` process on WIN11-CLIENT01 spawned `powershell.exe` using the
+`-EncodedCommand` parameter, a base64-encoded command line. This process
+chain and command-line pattern is a well-known technique used to obscure
+the true intent of a PowerShell command from simple keyword-based
+detection.
+
+## Investigation
+1. **Reviewed the triggering event.** Sysmon Event ID 1 showed
+   `powershell.exe` (Image) launched by `cmd.exe` (ParentImage), running
+   under user `WIN11-CLIENT01\brand`, with `IntegrityLevel: Medium`
+   (not elevated/administrator). The `CommandLine` field contained
+   `-EncodedCommand` followed by a base64-encoded string.
+2. **Decoded the command for verification.** The base64 string decoded
+   to `Invoke-WebRequest -Uri http://example.com`, a command that
+   fetches content from a URL. In this case the destination was a
+   benign test domain, but the technique itself (encoded PowerShell
+   fetching a remote resource) is structurally identical to how real
+   malware stagers and droppers retrieve second-stage payloads.
+3. **Assessed why the encoding itself matters, independent of what it
+   decodes to.** Base64 encoding does not make a command
+   uncrackable; it is trivially reversible by an analyst who knows to
+   decode it. Its actual value to an attacker is evading detection
+   tools that rely on matching plain-text keywords (e.g. scanning for
+   the literal string `Invoke-WebRequest` or `DownloadString`), since an
+   encoded command line will not contain those strings verbatim. This
+   means the presence of `-EncodedCommand` itself is a meaningful
+   indicator, regardless of the decoded content's apparent severity.
+4. **Noted an associated Sysmon Event ID 8 (CreateRemoteThread)** logged
+   in close proximity to the process creation. CreateRemoteThread is
+   associated with process injection techniques and warrants a closer
+   look in a full investigation, though it can also occur as a normal
+   part of certain application initialization; flagged here as
+   something to correlate further rather than a confirmed finding.
+5. **Considered how this activity could occur without prior alerts.**
+   Unlike the reconnaissance (Investigation 01) and brute-force
+   (Investigation 02) findings, this event does not depend on any prior
+   network-based attack against the host. A very common real-world path
+   to this exact process chain is phishing: a user opens a
+   malicious email attachment (e.g. a macro-enabled Office document),
+   and the Office application spawns PowerShell directly, with no
+   scanning or credential-guessing involved at all. This means an
+   Execution-stage detection like this one is necessary independent of
+   whether earlier-stage detections (recon, credential access) fired,
+   since phishing skips directly to this stage.
+
+## Assessment
+**Higher severity than Investigations 01 and 02, and treated as
+suspicious pending further review.** The first two findings both
+represented an attacker attempting to gain access, which is pre-compromise
+activity. This finding represents code already executing on the
+endpoint, meaning some form of access (legitimate or otherwise) already
+exists. In this lab, the command itself was benign (contacting a test
+domain), but the pattern, encoded PowerShell spawned from cmd.exe, is
+identical in structure to real malware execution chains and should be
+treated as a genuine indicator requiring investigation in any real
+environment, not dismissed based on the specific decoded content alone.
+
+## MITRE ATT&CK Mapping
+**T1059.001 - Command and Scripting Interpreter: PowerShell**
+(Execution tactic). The use of `-EncodedCommand` specifically also maps
+to **T1027 - Obfuscated Files or Information** (Defense Evasion tactic),
+since the technique's primary purpose is evading detection rather than
+enabling any additional functionality the command wouldn't otherwise
+have. This event is a good example of a single piece of activity
+mapping to more than one ATT&CK technique simultaneously.
+
+## Recommended Action
+- Decode and review the full command line content immediately upon
+  alert (do not treat "it's encoded" as a stopping point; decoding is
+  quick and provides the actual evidence)
+- Correlate with the user's recent activity: was this user expected to
+  be running PowerShell commands, and does their broader activity
+  (email, browser history, other process activity) suggest a phishing
+  interaction shortly before this event?
+- Investigate the associated CreateRemoteThread event (Event ID 8) to
+  rule out or confirm process injection
+- If the decoded command references an external URL or IP, check it
+  against threat intelligence sources before assuming benign intent
+- Consider PowerShell logging/restriction policies (e.g. Constrained
+  Language Mode, script block logging) as a preventive control, in
+  addition to detection
+
+## Detection Notes
+- **What made this detectable:** searching Event ID 1's `CommandLine`
+  field for the literal string `-EncodedCommand` using both-sided
+  wildcards (`"*EncodedCommand*"`), necessary because the flag appears
+  in the middle of the full command line, not at the start or end.
+- **Evasion considerations:** an attacker aware of this detection could
+  avoid the literal `-EncodedCommand` flag by using PowerShell's
+  parameter abbreviation (e.g. `-enc` or even shorter unambiguous
+  prefixes PowerShell accepts), which would not match this specific
+  search string. A more robust detection would account for common
+  abbreviated forms of the flag, or focus on other indicators (e.g. any
+  PowerShell process with a very long or high-entropy command line)
+  rather than relying on one exact flag spelling.
+- **False positive potential:** legitimate IT automation and some
+  software installers do use `-EncodedCommand` intentionally (e.g. to
+  safely pass complex commands through multiple layers of shell
+  parsing). Correlating with the parent process, user, and whether the
+  activity fits expected administrative behavior is necessary to
+  distinguish this from a genuine attack.
