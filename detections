@@ -1,1 +1,48 @@
+# ============================================================
+# 01 - RDP Inbound Connection Detected
+# ============================================================
+# Detects any inbound connection to RDP (port 3389), catching
+# reconnaissance/scanning activity that finds RDP open.
+# Schedule: hourly, checking last 60 minutes
+# MITRE ATT&CK: T1046 - Network Service Discovery
 
+index=main host="WIN11-CLIENT01" EventCode=3 DestinationPort=3389 Initiated=false
+
+
+# ============================================================
+# 02 - RDP Brute Force Attempt Detected
+# ============================================================
+# Aggregates inbound RDP connections by source IP; flags any source
+# with more than 5 connection attempts within the search window.
+# Schedule: hourly, checking last 60 minutes
+# MITRE ATT&CK: T1110.001 - Brute Force: Password Guessing
+
+index=main host="WIN11-CLIENT01" EventCode=3 DestinationPort=3389 Initiated=false
+| stats count by SourceIp
+| where count > 5
+
+
+# ============================================================
+# 03 - Suspicious Encoded PowerShell Execution
+# ============================================================
+# Detects any process creation event where the command line contains
+# the -EncodedCommand flag, a common technique for obfuscating
+# PowerShell commands to evade keyword-based detection.
+# Schedule: every 15 minutes (cron: */15 * * * *), checking last 15 minutes
+# MITRE ATT&CK: T1059.001 - Command and Scripting Interpreter: PowerShell
+#               T1027 - Obfuscated Files or Information
+
+index=main host="WIN11-CLIENT01" EventCode=1 CommandLine="*EncodedCommand*"
+
+
+# ============================================================
+# 04 - Registry Run Key Persistence Detected
+# ============================================================
+# Detects registry value-set events tagged by Sysmon's own config as
+# matching a known Run key persistence pattern (RuleName field),
+# rather than hand-matching the registry path directly.
+# Schedule: every 15 minutes (cron: */15 * * * *), checking last 15 minutes
+# MITRE ATT&CK: T1547.001 - Boot or Logon Autostart Execution: Registry
+#               Run Keys / Startup Folder
+
+index=main host="WIN11-CLIENT01" EventCode=13 RuleName="*RunKey*"
